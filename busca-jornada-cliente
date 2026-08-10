@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Busca — Jornada do Cliente</title>
+<style>
+  :root{
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --card: #fbfaf7;
+    --ink: #2b2b26;
+    --ink-soft: #8a8680;
+    --line: #ebe8e1;
+    --accent: #2f6f5e;
+    --accent-soft: #eaf3f0;
+    --danger: #b3492f;
+    --danger-soft: #fbeae4;
+    --toast-bg: #2b2b26;
+    --toast-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg: #191919;
+      --surface: #232323;
+      --card: #202020;
+      --ink: #e9e6e0;
+      --ink-soft: #928d84;
+      --line: #333230;
+      --accent: #4fae96;
+      --accent-soft: #1d3330;
+      --danger: #e0755a;
+      --danger-soft: #3a2420;
+      --toast-bg: #e9e6e0;
+      --toast-ink: #191919;
+    }
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 24px 18px;
+  }
+  .wrap{ max-width: 580px; margin: 0 auto; }
+
+  .top-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .search-box{ position: relative; flex: 1; }
+  .search-box input{
+    width: 100%;
+    padding: 13px 16px 13px 40px;
+    font-size: 15px;
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    outline: none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .search-box input:focus{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .search-icon{
+    position: absolute;
+    left: 13px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    color: var(--ink-soft);
+    pointer-events: none;
+  }
+  .edit-toggle{
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: var(--surface);
+    font-size: 16px;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease;
+  }
+  .edit-toggle:hover{ background: var(--accent-soft); }
+  .edit-toggle.active{ background: var(--accent); border-color: var(--accent); }
+
+  /* ---------- modo busca ---------- */
+  .results{ margin-top: 6px; }
+  .result-link{
+    display: block;
+    padding: 10px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--ink);
+    transition: background .12s ease;
+  }
+  .result-link:hover{ background: var(--accent-soft); }
+  .result-title{
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .result-title mark{ background: #fff2cf; color: #2b2b26; border-radius: 3px; padding: 0 1px; }
+  .result-summary{
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .empty{ padding: 14px; color: var(--ink-soft); font-size: 13.5px; }
+  .fuzzy-note{
+    font-size: 12px;
+    color: var(--ink-soft);
+    padding: 4px 14px 8px;
+    font-style: italic;
+  }
+
+  /* ---------- modo edição ---------- */
+  #editPanel{ display: none; margin-top: 14px; }
+  #editPanel.show{ display: block; }
+  .edit-hint{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-bottom: 14px;
+    line-height: 1.5;
+  }
+  .edit-card{
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    background: var(--card);
+  }
+  .field{ margin-bottom: 8px; }
+  .field label{
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    margin-bottom: 3px;
+  }
+  .field input, .field textarea{
+    width: 100%;
+    font-family: inherit;
+    font-size: 13.5px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    outline: none;
+    background: var(--surface);
+    color: var(--ink);
+    resize: none;
+  }
+  .field input:focus, .field textarea:focus{ border-color: var(--accent); }
+  .edit-card-bottom{ display: flex; justify-content: flex-end; margin-top: 6px; }
+  .remove-btn{
+    font-size: 12px;
+    color: var(--danger);
+    background: var(--danger-soft);
+    border: none;
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  .remove-btn:hover{ opacity: .8; }
+
+  .add-btn{
+    width: 100%;
+    padding: 11px;
+    border: 1.5px dashed var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+  .add-btn:hover{ background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+
+  .save-row{
+    display: flex;
+    gap: 8px;
+    position: sticky;
+    bottom: 0;
+    background: var(--bg);
+    padding: 10px 0 2px;
+  }
+  .save-btn, .done-btn{
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .save-btn{ background: var(--accent); color: #fff; }
+  .save-btn:hover{ opacity: .9; }
+  .done-btn{ background: var(--surface); color: var(--ink-soft); border: 1.5px solid var(--line); }
+  .done-btn:hover{ background: var(--accent-soft); }
+
+  .toast{
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--toast-bg);
+    color: var(--toast-ink);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .toast.show{ opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top-row">
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input id="searchInput" type="text" placeholder="Buscar material..." autocomplete="off">
+    </div>
+    <button class="edit-toggle" id="editToggle" title="Modo edição">✏️</button>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <div id="editPanel">
+    <div class="edit-hint">Edite, adicione ou remova materiais abaixo. Ao terminar, clique em <b>"Baixar arquivo atualizado"</b> e suba esse novo arquivo no lugar do antigo — sem precisar programar nada.</div>
+    <div id="editList"></div>
+    <button class="add-btn" id="addBtn">+ Adicionar material</button>
+    <div class="save-row">
+      <button class="done-btn" id="doneBtn">Voltar para a busca</button>
+      <button class="save-btn" id="downloadBtn">⬇️ Baixar arquivo atualizado</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="application/json" id="docs-data">
+[
+  {
+    "title": "Como funciona o cadastro e elegibilidade",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Funcionamento do cadastro e quem é elegível a Crédito Fácil ou Antecipação Salarial.",
+    "keywords": "como funciona o cadastro, elegibilidade, grupo a b c, quem pode contratar, elegível antecipação, elegível crédito fácil"
+  },
+  {
+    "title": "Dificuldade para finalizar o cadastro",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Erros na tela de cadastro (Belvo/Cumbuca) e como orientar o cliente a tentar novamente.",
+    "keywords": "erro no cadastro, tela de erro, belvo, cumbuca, não consigo me cadastrar, não redirecionou pro banco"
+  },
+  {
+    "title": "Recebe salário em banco não atendido",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "O que informar quando o cliente recebe salário em um banco que a Facio não atende.",
+    "keywords": "banco não atendido, banco não aceito, meu banco não aparece, análise manual"
+  },
+  {
+    "title": "Cliente não se recorda ou nega ter contratado",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Como investigar suspeita de fraude x esquecimento quando o cliente diz que não contratou.",
+    "keywords": "não contratei, não reconheço essa cobrança, não lembro de ter contratado, não fiz esse pedido"
+  },
+  {
+    "title": "Não recebe o código de acesso",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "O que fazer quando o código de acesso enviado por WhatsApp não chega ao cliente.",
+    "keywords": "código de acesso, não recebe o código, código não chega, whatsapp código, código de verificação"
+  },
+  {
+    "title": "Atualização de dados cadastrais (e-mail e telefone)",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Cenários de troca de e-mail e telefone, com ou sem validação via Open Finance/CAF.",
+    "keywords": "atualizar email, trocar telefone, mudar número, dados cadastrais, alterar cadastro, número em uso"
+  },
+  {
+    "title": "Troca de banco cadastrado",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Passo a passo e regras (renda mínima de 3 meses) para trocar a conta bancária cadastrada.",
+    "keywords": "troca de banco, trocar conta bancária, mudar banco, bancos atendidos, trocar conta"
+  },
+  {
+    "title": "Exclusão de cadastro (LGPD)",
+    "url": "https://app.notion.com/p/36caabaad8a580a78498d9b03e0556d6",
+    "summary": "Quando é possível excluir o cadastro do cliente e os impedimentos por dívida ou produto ativo.",
+    "keywords": "excluir cadastro, exclusão de cadastro, lgpd, apagar meus dados, sair da facio, cancelar cadastro"
+  },
+  {
+    "title": "Suspeita de fraude — critérios e cenários",
+    "url": "https://app.notion.com/p/36caabaad8a580a49545ce04eac8d288",
+    "summary": "Cenários e critérios que levam a marcar um cadastro como suspeita de fraude.",
+    "keywords": "suspeita de fraude, fraude, não reconheço a contratação, dados não são meus, golpe"
+  },
+  {
+    "title": "Validação de documentos via CAF",
+    "url": "https://app.notion.com/p/36caabaad8a580a49545ce04eac8d288",
+    "summary": "Como consultar a CAF, motivos de reprovação de documento e reenvio de documentação.",
+    "keywords": "caf, validação de documento, documento reprovado, documento recusado, reenviar documento, liveness, selfie"
+  },
+  {
+    "title": "Cadastro com tarja vermelha ou preta",
+    "url": "https://app.notion.com/p/36caabaad8a580a49545ce04eac8d288",
+    "summary": "Bloqueios antigos por tarja vermelha ou preta não podem mais ser revertidos.",
+    "keywords": "tarja vermelha, tarja preta, bloqueio antigo, não consigo desbloquear, bloqueio histórico"
+  },
+  {
+    "title": "Reprovado por renda",
+    "url": "https://app.notion.com/p/36caabaad8a580df8b83cdefd6854113",
+    "summary": "Cliente não teve renda identificada na análise de crédito (reason: salary_not_found).",
+    "keywords": "reprovado por renda, não achou renda, renda não identificada, análise de crédito reprovada"
+  },
+  {
+    "title": "Reprovado por modelo",
+    "url": "https://app.notion.com/p/36caabaad8a580df8b83cdefd6854113",
+    "summary": "Reprovação pelo modelo de crédito (reason: by model) e prazo de 3 meses para nova análise.",
+    "keywords": "reprovado por modelo, motivo da reprovação, reprovação de crédito, prazo entre análises"
+  },
+  {
+    "title": "Bloqueado por renda",
+    "url": "https://app.notion.com/p/36caabaad8a580df8b83cdefd6854113",
+    "summary": "Bloqueio por não identificar renda válida (salary not found/terminated) e casos de exceção de desbloqueio.",
+    "keywords": "bloqueado por renda, salary not found, salary terminated, desbloqueio por exceção, reconectar conta"
+  },
+  {
+    "title": "Bloqueado por atraso",
+    "url": "https://app.notion.com/p/36caabaad8a580df8b83cdefd6854113",
+    "summary": "Bloqueio de 3 meses após atraso (reason: over5V) e as únicas exceções para desbloqueio.",
+    "keywords": "bloqueado por atraso, over5v, prazo de desbloqueio, quanto tempo fico bloqueado, bloqueio por atraso"
+  },
+  {
+    "title": "Bloqueado por falta de dados para gerar CCB",
+    "url": "https://app.notion.com/p/36caabaad8a580df8b83cdefd6854113",
+    "summary": "Bloqueio por falta de dados mínimos para gerar a CCB (reason: account_change_required).",
+    "keywords": "account_change_required, dados para ccb, não consigo contratar, bloqueado sem motivo aparente"
+  },
+  {
+    "title": "Métodos de pagamento disponíveis",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Quais métodos (Pix Copia e Cola, boleto, cartão de débito) estão disponíveis por produto.",
+    "keywords": "métodos de pagamento, boleto, pix copia e cola, cartão de débito, como pagar"
+  },
+  {
+    "title": "Data de vencimento e alteração",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Como funciona a data de vencimento e em que condição é possível alterá-la.",
+    "keywords": "data de vencimento, mudar vencimento, alterar data, trocar data de pagamento"
+  },
+  {
+    "title": "Pagamento antecipado",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Regras de pagamento antes do vencimento, com ou sem desconto, por produto.",
+    "keywords": "pagamento antecipado, pagar antes do vencimento, desconto por pagar antes, quitar antes, antecipar pagamento"
+  },
+  {
+    "title": "Pagamento parcial",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Disponibilidade de pagamento parcial no Crédito Fácil e na Antecipação Salarial.",
+    "keywords": "pagamento parcial, pagar uma parte, pagar só uma parte da dívida"
+  },
+  {
+    "title": "Devolução / desistência (arrependimento em 7 dias)",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Como o cliente devolve o valor recebido em até 7 dias corridos, e o que muda após esse prazo.",
+    "keywords": "devolução, devolver o dinheiro, desistência, arrependimento, estorno, cancelar contratação, devolver pix"
+  },
+  {
+    "title": "Aumento de limite e nova contratação",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "Como funciona o pedido de aumento de limite e nova contratação com pedido em aberto.",
+    "keywords": "aumento de limite, novo limite, nova contratação, valor máximo, quero mais crédito"
+  },
+  {
+    "title": "Pendência no Serasa mesmo já pago (DDA)",
+    "url": "https://app.notion.com/p/089aabaad8a582e39804017ccecc8c7b",
+    "summary": "O que é o DDA (espelho digital do boleto) e por que pode aparecer pendência no Serasa após o pagamento.",
+    "keywords": "dda, pendência no serasa já paguei, boleto pago mas aparece pendente, débito direto autorizado"
+  },
+  {
+    "title": "Transferência Automática / Pix Inteligente — como funciona",
+    "url": "https://app.notion.com/p/98faabaad8a583c0961801cd6e93d234",
+    "summary": "O que é o Pix Inteligente, como funciona a autorização e a cobrança automática.",
+    "keywords": "pix inteligente, transferência automática, como funciona pix inteligente, débito automático, autorização de pix"
+  },
+  {
+    "title": "Revogação do Pix Inteligente",
+    "url": "https://app.notion.com/p/98faabaad8a583c0961801cd6e93d234",
+    "summary": "Como o cliente revoga o consentimento do Pix Inteligente pelos 3 canais disponíveis, com efeito imediato.",
+    "keywords": "revogar pix inteligente, cancelar débito automático, revogação, parar cobrança automática, cancelar autorização, tirar essa opção"
+  },
+  {
+    "title": "Encerramento da Conta Facio (QI SCD)",
+    "url": "https://app.notion.com/p/36caabaad8a580f5b284d937fc0d6dd2",
+    "summary": "Como reportar e orientar o encerramento da conta de pagamentos na QI SCD, com ou sem dívida em aberto.",
+    "keywords": "encerrar conta qi, fechar conta qi tech, cancelar conta de pagamentos, encerramento de conta, conta facio"
+  },
+  {
+    "title": "Pix avulso enviado para a conta QI Tech",
+    "url": "https://app.notion.com/p/98faabaad8a583c0961801cd6e93d234",
+    "summary": "O que fazer quando o cliente envia um Pix avulso por engano para a conta QI Tech.",
+    "keywords": "pix avulso, pix errado, enviei pix errado, estorno de pix, pix por engano"
+  },
+  {
+    "title": "Encargos de atraso (juros e multa)",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Como funcionam multa, mora e juros compostos no atraso, e as diferenças entre produtos.",
+    "keywords": "juros de atraso, multa, mora, encargos, quanto eu devo, valor da dívida atualizado"
+  },
+  {
+    "title": "Parcelamento da dívida em atraso",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Regras de parcelamento após o vencimento, disponível apenas em casos específicos por produto.",
+    "keywords": "parcelar dívida, parcelamento em atraso, dividir a dívida, parcelar débito"
+  },
+  {
+    "title": "Negociação e quitação à vista",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Como negociar a quitação à vista da dívida em atraso (Antecipação usa a árvore de negociação).",
+    "keywords": "negociar dívida, quitação à vista, acordo de dívida, desconto na dívida, proposta de pagamento"
+  },
+  {
+    "title": "Remoção do CPF do SERASA",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Prazo e condições para remover o nome do cliente do SERASA depois do pagamento.",
+    "keywords": "remover do serasa, tirar do serasa, negativação, limpar nome, saiu do serasa"
+  },
+  {
+    "title": "Documentos da dívida (DED, DDC, termo de quitação)",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Como solicitar o descritivo de evolução da dívida, documento descritivo de crédito ou termo de quitação.",
+    "keywords": "ded, ddc, termo de quitação, descritivo da dívida, documento de quitação, comprovante de quitação"
+  },
+  {
+    "title": "Baixa por falecimento",
+    "url": "https://app.notion.com/p/c9faabaad8a5836cb57d81a14a40ac9c",
+    "summary": "Procedimento para dar baixa na dívida em caso de falecimento do titular do contrato.",
+    "keywords": "falecimento, óbito, morte do titular, atestado de óbito, cliente faleceu"
+  },
+  {
+    "title": "Crédito do Trabalhador",
+    "url": "https://app.notion.com/p/3f6aabaad8a582e2a82081420f588e0e",
+    "summary": "Status da proposta, reprovação por modelo, link de oferta e guia do FGTS.",
+    "keywords": "crédito do trabalhador, consignado, fgts, guia fgts, status ct, reprovado modelo ct, link de oferta"
+  },
+  {
+    "title": "Crédito Fácil (regras gerais)",
+    "url": "https://app.notion.com/p/dc1aabaad8a5835882668167f339b363",
+    "summary": "Regras e dúvidas específicas do produto Crédito Fácil.",
+    "keywords": "crédito fácil, empréstimo fácil, regras crédito fácil"
+  },
+  {
+    "title": "Programa de indicação",
+    "url": "https://app.notion.com/p/a4baabaad8a5829f8adf81e6d3a1d860",
+    "summary": "Como funciona o programa de indicação: indicar amigos e recompensas.",
+    "keywords": "indicação, programa de indicação, indicar amigo, recompensa, indique e ganhe"
+  },
+  {
+    "title": "Depósito",
+    "url": "https://app.notion.com/p/36caabaad8a580de9481d21a0b10194d",
+    "summary": "Dúvidas sobre prazo e problemas quando o dinheiro não cai na conta do cliente.",
+    "keywords": "depósito, dinheiro não caiu, valor não caiu, prazo do depósito, depósito não recebido"
+  },
+  {
+    "title": "Negociações — Árvore de Decisão",
+    "url": "https://app.notion.com/p/36caabaad8a580698a82efa6efcc77de",
+    "summary": "Árvore de decisão para negociação de dívidas em atraso na Antecipação Salarial.",
+    "keywords": "árvore de decisão, negociação de dívida, proposta de acordo, desconto negociação"
+  },
+  {
+    "title": "Tutoriais de alinhamentos",
+    "url": "https://app.notion.com/p/36daabaad8a580718562ea53e8a66b8b",
+    "summary": "Tutoriais internos de alinhamento e treinamento do time de atendimento.",
+    "keywords": "tutorial, alinhamento, treinamento, onboarding"
+  },
+  {
+    "title": "Ferramentas Facilitadoras",
+    "url": "https://app.notion.com/p/6c7aabaad8a582bcb571815d802ddecb",
+    "summary": "Ferramentas internas que apoiam o atendimento, como Retool e calculadoras.",
+    "keywords": "ferramentas, retool, calculadora, ferramentas internas"
+  },
+  {
+    "title": "Outros assuntos",
+    "url": "https://app.notion.com/p/8f7aabaad8a582b9812001af44035066",
+    "summary": "Assuntos diversos que não se encaixam nas demais categorias.",
+    "keywords": "outros assuntos, diversos, testes"
+  }
+]
+</script>
+
+<script id="appScript">
+let DOCS = JSON.parse(document.getElementById('docs-data').textContent);
+
+const input = document.getElementById('searchInput');
+const resultsEl = document.getElementById('results');
+const editToggle = document.getElementById('editToggle');
+const editPanel = document.getElementById('editPanel');
+const editList = document.getElementById('editList');
+const toast = document.getElementById('toast');
+
+function norm(s){
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+}
+
+// Palavras muito comuns em português que não ajudam a diferenciar o tema buscado.
+const STOPWORDS = new Set(['de','da','do','das','dos','e','o','a','os','as','um','uma','uns','umas',
+  'para','com','sem','no','na','nos','nas','que','meu','minha','seus','suas','seu','sua','foi','so',
+  'isso','isto','aquilo','sobre','por','como','ao','aos','em','se','ou','ja','tem','ter','vou','quero',
+  'quer','preciso','precisa','onde','qual','quais','pelo','pela','este','esta','esse','essa','ainda']);
+
+function tokenize(text){
+  return norm(text).split(/[^a-z0-9]+/).filter(w => w.length > 1 && !STOPWORDS.has(w));
+}
+
+// Raiz aproximada da palavra (corta em 5 letras) — agrupa variações como
+// "faleceu / falecimento / falecido" ou "revogar / revogação / revogado".
+function stem(w){
+  return w.length > 5 ? w.slice(0, 5) : w;
+}
+
+// Distância de edição simples, para tolerar pequenos erros de digitação.
+function levenshtein(a, b){
+  if(Math.abs(a.length - b.length) > 2) return 99;
+  const dp = [];
+  for(let i = 0; i <= a.length; i++) dp.push([i]);
+  for(let j = 1; j <= b.length; j++) dp[0][j] = j;
+  for(let i = 1; i <= a.length; i++){
+    for(let j = 1; j <= b.length; j++){
+      dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function keywordList(doc){
+  return (doc.keywords || '').split(',').map(k => k.trim()).filter(Boolean);
+}
+
+// Todas as palavras (título + resumo + palavras-chave) do material, usadas
+// para a correspondência aproximada palavra a palavra.
+function docBag(doc){
+  const kws = keywordList(doc);
+  const allText = [doc.title || '', ...kws, doc.summary || ''].join(' ');
+  return tokenize(allText);
+}
+
+function score(doc, q){
+  const nq = norm(q);
+  const qTokens = tokenize(q);
+  if(qTokens.length === 0) return 0;
+
+  let s = 0;
+
+  // Sinal forte: a frase digitada bate quase literalmente com o título/palavra-chave/resumo.
+  if(norm(doc.title).includes(nq)) s += 50;
+  keywordList(doc).forEach(k => {
+    const nk = norm(k);
+    if(nk === nq) s += 60;
+    else if(nk.includes(nq) || nq.includes(nk)) s += 30;
+  });
+  if(norm(doc.summary).includes(nq)) s += 10;
+
+  // Sinal aproximado: cada palavra da busca é comparada com todas as palavras
+  // do material (raiz da palavra, substring ou erro de digitação pequeno).
+  const bag = docBag(doc);
+  const bagStems = bag.map(stem);
+  let tokenHits = 0;
+  qTokens.forEach(qt => {
+    const qs = stem(qt);
+    let hit = 0;
+    for(let i = 0; i < bag.length; i++){
+      const w = bag[i];
+      if(w === qt){ hit = 1; break; }
+      if(bagStems[i] === qs){ hit = Math.max(hit, 0.85); continue; }
+      if(w.includes(qt) || qt.includes(w)){ hit = Math.max(hit, 0.6); continue; }
+      if(levenshtein(qt, w) <= (qt.length > 5 ? 2 : 1)){ hit = Math.max(hit, 0.5); }
+    }
+    tokenHits += hit;
+  });
+  s += (tokenHits / qTokens.length) * 20;
+
+  return s;
+}
+
+function highlight(text, q){
+  const nq = norm(q);
+  const nText = norm(text || '');
+  const idx = nText.indexOf(nq);
+  if(idx === -1 || !nq) return text || '';
+  return (text || '').slice(0, idx) + '<mark>' + (text || '').slice(idx, idx + q.length) + '</mark>' + (text || '').slice(idx + q.length);
+}
+
+function renderResults(){
+  const q = input.value.trim();
+
+  if(!q){
+    resultsEl.innerHTML = '';
+    return;
+  }
+
+  const list = DOCS.map(d => ({ doc: d, s: score(d, q) }))
+    .filter(x => x.s > 2)
+    .sort((a,b) => b.s - a.s)
+    .slice(0, 8);
+
+  if(list.length === 0){
+    resultsEl.innerHTML = `<div class="empty">Nada encontrado para "${q}". Tente outras palavras.</div>`;
+    return;
+  }
+
+  // Se não houve nenhuma correspondência quase literal, avisa que são resultados aproximados.
+  const isFuzzyOnly = list[0].s < 20;
+  const note = isFuzzyOnly ? `<div class="fuzzy-note">Nenhum resultado exato — o mais parecido com "${q}":</div>` : '';
+
+  resultsEl.innerHTML = note + list.map(({doc}) => `
+    <a class="result-link" href="${doc.url}" target="_blank" rel="noopener">
+      <div class="result-title">${highlight(doc.title, q)}</div>
+      <div class="result-summary">${doc.summary || ''}</div>
+    </a>
+  `).join('');
+}
+
+input.addEventListener('input', renderResults);
+
+// ---------- modo edição ----------
+function renderEditList(){
+  editList.innerHTML = DOCS.map((doc, i) => `
+    <div class="edit-card" data-index="${i}">
+      <div class="field">
+        <label>Título</label>
+        <input type="text" data-field="title" value="${(doc.title || '').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="field">
+        <label>Resumo (uma linha)</label>
+        <input type="text" data-field="summary" value="${(doc.summary || '').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="field">
+        <label>Link do material (Notion)</label>
+        <input type="text" data-field="url" value="${(doc.url || '').replace(/"/g,'&quot;')}">
+      </div>
+      <div class="field">
+        <label>Palavras-chave (separadas por vírgula)</label>
+        <textarea rows="2" data-field="keywords">${doc.keywords || ''}</textarea>
+      </div>
+      <div class="edit-card-bottom">
+        <button class="remove-btn" data-remove="${i}">Remover material</button>
+      </div>
+    </div>
+  `).join('');
+
+  editList.querySelectorAll('.edit-card').forEach(card => {
+    const idx = Number(card.dataset.index);
+    card.querySelectorAll('[data-field]').forEach(fieldEl => {
+      fieldEl.addEventListener('input', () => {
+        DOCS[idx][fieldEl.dataset.field] = fieldEl.value;
+      });
+    });
+  });
+
+  editList.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.remove);
+      DOCS.splice(idx, 1);
+      renderEditList();
+    });
+  });
+}
+
+editToggle.addEventListener('click', () => {
+  const showing = editPanel.classList.toggle('show');
+  editToggle.classList.toggle('active', showing);
+  resultsEl.style.display = showing ? 'none' : '';
+  if(showing) renderEditList();
+});
+
+document.getElementById('doneBtn').addEventListener('click', () => {
+  editPanel.classList.remove('show');
+  editToggle.classList.remove('active');
+  resultsEl.style.display = '';
+});
+
+document.getElementById('addBtn').addEventListener('click', () => {
+  DOCS.push({ title: '', summary: '', url: '', keywords: '' });
+  renderEditList();
+  editList.lastElementChild.querySelector('input[data-field="title"]').focus();
+});
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 2200);
+}
+
+document.getElementById('downloadBtn').addEventListener('click', () => {
+  const cleanDocs = DOCS.filter(d => d.title && d.url);
+  const scriptEl = document.getElementById('appScript');
+
+  const clone = document.documentElement.cloneNode(true);
+  clone.querySelector('#docs-data').textContent = '\n' + JSON.stringify(cleanDocs, null, 2) + '\n';
+  clone.querySelector('#editPanel').classList.remove('show');
+  clone.querySelector('#editToggle').classList.remove('active');
+  clone.querySelector('#results').removeAttribute('style');
+  clone.querySelector('#searchInput').removeAttribute('value');
+  // garante que a lógica do app no arquivo exportado é idêntica à desta página
+  clone.querySelector('#appScript').textContent = scriptEl.textContent;
+
+  const html = '<!DOCTYPE html>\n' + clone.outerHTML;
+  const blob = new Blob([html], { type: 'text/html' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'busca-jornada-cliente.html';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  showToast('Arquivo baixado — suba ele no lugar do antigo.');
+});
+</script>
+</body>
+</html>
