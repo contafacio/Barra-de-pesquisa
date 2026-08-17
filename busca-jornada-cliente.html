@@ -213,6 +213,13 @@
   .done-btn{ background: var(--surface); color: var(--ink-soft); border: 1.5px solid var(--line); }
   .done-btn:hover{ background: var(--accent-soft); }
 
+  .save-indicator{
+    font-size: 12px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    text-align: right;
+  }
+
   .toast{
     position: fixed;
     bottom: 20px;
@@ -246,19 +253,14 @@
   <div class="results" id="results"></div>
 
   <div id="editPanel">
-    <div class="edit-hint">Edite, adicione ou remova materiais abaixo. Ao terminar:<br>
-      1) clique em <b>"Baixar materiais.csv"</b><br>
-      2) clique em <b>"Abrir no GitHub"</b><br>
-      3) no GitHub, apague o conteúdo antigo, cole o conteúdo do arquivo baixado e clique em "Commit changes"<br>
-      Em ~1 minuto a busca já mostra pra todo mundo, sem precisar tocar no arquivo principal.
-    </div>
+    <div class="edit-hint">Edite, adicione ou remova materiais abaixo e clique em Salvar. A mudança aparece pra todo mundo em instantes.</div>
     <div id="editList"></div>
     <button class="add-btn" id="addBtn">+ Adicionar material</button>
     <div class="save-row">
       <button class="done-btn" id="doneBtn">Voltar para a busca</button>
-      <button class="done-btn" id="openGithubBtn">Abrir no GitHub ↗</button>
-      <button class="save-btn" id="downloadBtn">⬇️ Baixar materiais.csv</button>
+      <button class="save-btn" id="saveBtn">Salvar</button>
     </div>
+    <div class="save-indicator" id="saveIndicator"></div>
   </div>
 
 </div>
@@ -548,59 +550,49 @@
 
 <script id="appScript">
 let DOCS = JSON.parse(document.getElementById('fallback-docs-data').textContent);
+let lastUpdatedStamp = null;
+let apiAvailable = true;
 
-// ---------- carregamento a partir do materiais.csv (mesma pasta no GitHub) ----------
-// Faz um parser de CSV simples que respeita aspas (para campos com vírgulas dentro).
-function parseCSV(text){
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for(let i = 0; i < text.length; i++){
-    const c = text[i];
-    if(inQuotes){
-      if(c === '"'){
-        if(text[i+1] === '"'){ field += '"'; i++; }
-        else inQuotes = false;
-      } else field += c;
-    } else {
-      if(c === '"') inQuotes = true;
-      else if(c === ','){ row.push(field); field = ''; }
-      else if(c === '\n' || c === '\r'){
-        if(field !== '' || row.length){ row.push(field); rows.push(row); }
-        field = ''; row = [];
-        if(c === '\r' && text[i+1] === '\n') i++;
-      } else field += c;
+const API_URL = '/api/materiais';
+
+// ---------- carregamento a partir da base compartilhada (Cloudflare KV) ----------
+async function loadSharedData(){
+  try {
+    const res = await fetch(API_URL, { cache: 'no-store' });
+    if(!res.ok) throw new Error('status ' + res.status);
+    const data = await res.json();
+    if(data && Array.isArray(data.docs)){
+      DOCS = data.docs;
+      lastUpdatedStamp = data.lastUpdated || null;
     }
+    apiAvailable = true;
+  } catch (err){
+    apiAvailable = false;
+    console.warn('Não foi possível carregar os materiais compartilhados — usando a lista padrão embutida.', err);
   }
-  if(field !== '' || row.length){ row.push(field); rows.push(row); }
-  return rows.filter(r => r.length && r.some(v => v !== ''));
 }
 
-function csvToDocs(text){
-  const rows = parseCSV(text);
-  if(rows.length < 2) return null;
-  const header = rows[0].map(h => h.trim().toLowerCase());
-  const idx = {
-    title: header.indexOf('titulo'),
-    summary: header.indexOf('resumo'),
-    url: header.indexOf('link'),
-    keywords: header.indexOf('palavras_chave')
-  };
-  if(idx.title === -1 || idx.url === -1) return null;
-  return rows.slice(1).map(r => ({
-    title: (r[idx.title] || '').trim(),
-    summary: (r[idx.summary] || '').trim(),
-    url: (r[idx.url] || '').trim(),
-    keywords: (r[idx.keywords] || '').trim()
-  })).filter(d => d.title && d.url);
+async function persist(){
+  const now = new Date();
+  lastUpdatedStamp = now.toLocaleString('pt-BR');
+  const ind = document.getElementById('saveIndicator');
+  ind.textContent = 'Salvando para todo mundo...';
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ docs: DOCS, lastUpdated: lastUpdatedStamp })
+    });
+    if(!res.ok) throw new Error('status ' + res.status);
+    apiAvailable = true;
+    ind.textContent = 'Salvo para todo mundo às ' + now.toLocaleTimeString('pt-BR');
+    showToast('Materiais salvos com sucesso.');
+  } catch (err){
+    apiAvailable = false;
+    ind.textContent = '⚠️ Não foi possível salvar para todo mundo agora (sem conexão com a API).';
+  }
+  setTimeout(() => { if(ind.textContent.startsWith('Salvo')) ind.textContent = ''; }, 5000);
 }
-
-fetch('materiais.csv', { cache: 'no-store' })
-  .then(res => { if(!res.ok) throw new Error('sem materiais.csv'); return res.text(); })
-  .then(text => {
-    const parsed = csvToDocs(text);
-    if(parsed && parsed.length){ DOCS = parsed; renderResults(); }
-  })
-  .catch(() => { /* mantém a lista de fallback embutida */ });
 
 const input = document.getElementById('searchInput');
 const resultsEl = document.getElementById('results');
@@ -802,36 +794,20 @@ function showToast(msg){
   setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
-// Coloca aspas em cada campo do CSV e escapa aspas internas, no padrão que o parser acima entende.
-function csvEscape(v){
-  return '"' + String(v || '').replace(/"/g, '""') + '"';
-}
-
-document.getElementById('downloadBtn').addEventListener('click', () => {
-  const cleanDocs = DOCS.filter(d => d.title && d.url);
-  const header = ['titulo','resumo','link','palavras_chave'].join(',');
-  const lines = cleanDocs.map(d => [
-    csvEscape(d.title), csvEscape(d.summary), csvEscape(d.url), csvEscape(d.keywords)
-  ].join(','));
-  const csv = header + '\n' + lines.join('\n') + '\n';
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = 'materiais.csv';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  showToast('materiais.csv baixado — agora abra no GitHub e cole o conteúdo.');
+document.getElementById('saveBtn').addEventListener('click', () => {
+  DOCS = DOCS.filter(d => d.title && d.url);
+  persist();
+  renderEditList();
 });
 
-// Ajuste aqui se o repositório mudar de nome/usuário/branch.
-const GITHUB_EDIT_URL = 'https://github.com/contafacio/Barra-de-pesquisa/edit/main/materiais.csv';
-
-document.getElementById('openGithubBtn').addEventListener('click', () => {
-  window.open(GITHUB_EDIT_URL, '_blank');
-});
+(async function init(){
+  await loadSharedData();
+  renderResults();
+  if(!apiAvailable){
+    const ind = document.getElementById('saveIndicator');
+    ind.textContent = '⚠️ Não foi possível conectar à base compartilhada — mostrando a lista padrão embutida.';
+  }
+})();
 </script>
 </body>
 </html>
