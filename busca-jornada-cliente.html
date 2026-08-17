@@ -79,17 +79,18 @@
   }
   .edit-toggle{
     flex-shrink: 0;
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    border: 1.5px solid var(--line);
-    background: var(--surface);
-    font-size: 16px;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    opacity: .45;
+    font-size: 13px;
     cursor: pointer;
-    transition: background .12s ease, border-color .12s ease;
+    transition: opacity .15s ease, background .15s ease;
   }
-  .edit-toggle:hover{ background: var(--accent-soft); }
-  .edit-toggle.active{ background: var(--accent); border-color: var(--accent); }
+  .edit-toggle:hover{ opacity: 1; background: var(--accent-soft); }
+  .edit-toggle.active{ opacity: 1; background: var(--accent); }
 
   /* ---------- modo busca ---------- */
   .results{ margin-top: 6px; }
@@ -190,6 +191,7 @@
 
   .save-row{
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     position: sticky;
     bottom: 0;
@@ -198,6 +200,7 @@
   }
   .save-btn, .done-btn{
     flex: 1;
+    min-width: 120px;
     padding: 12px;
     border-radius: 10px;
     border: none;
@@ -243,12 +246,18 @@
   <div class="results" id="results"></div>
 
   <div id="editPanel">
-    <div class="edit-hint">Edite, adicione ou remova materiais abaixo. Ao terminar, clique em <b>"Baixar arquivo atualizado"</b> e suba esse novo arquivo no lugar do antigo — sem precisar programar nada.</div>
+    <div class="edit-hint">Edite, adicione ou remova materiais abaixo. Ao terminar:<br>
+      1) clique em <b>"Baixar materiais.csv"</b><br>
+      2) clique em <b>"Abrir no GitHub"</b><br>
+      3) no GitHub, apague o conteúdo antigo, cole o conteúdo do arquivo baixado e clique em "Commit changes"<br>
+      Em ~1 minuto a busca já mostra pra todo mundo, sem precisar tocar no arquivo principal.
+    </div>
     <div id="editList"></div>
     <button class="add-btn" id="addBtn">+ Adicionar material</button>
     <div class="save-row">
       <button class="done-btn" id="doneBtn">Voltar para a busca</button>
-      <button class="save-btn" id="downloadBtn">⬇️ Baixar arquivo atualizado</button>
+      <button class="done-btn" id="openGithubBtn">Abrir no GitHub ↗</button>
+      <button class="save-btn" id="downloadBtn">⬇️ Baixar materiais.csv</button>
     </div>
   </div>
 
@@ -256,7 +265,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script type="application/json" id="docs-data">
+<script type="application/json" id="fallback-docs-data">
 [
   {
     "title": "Como funciona o cadastro e elegibilidade",
@@ -503,12 +512,95 @@
     "url": "https://app.notion.com/p/8f7aabaad8a582b9812001af44035066",
     "summary": "Assuntos diversos que não se encaixam nas demais categorias.",
     "keywords": "outros assuntos, diversos, testes"
+  },
+  {
+    "title": "Atendimento a clientes que sofreram fraude (golpe externo)",
+    "url": "https://app.notion.com/p/3bfaabaad8a581efadacd5ce58675837",
+    "summary": "Como acolher clientes que caíram ou suspeitam de golpe usando o nome da Facio, com os canais oficiais e o passo a passo de orientação.",
+    "keywords": "golpe, fraude externa, site falso, phishing, caí no golpe, med pix, boletim de ocorrência, canais oficiais facio, site clonado"
+  },
+  {
+    "title": "Acolhimento a clientes com vício em jogos/apostas",
+    "url": "https://app.notion.com/p/3b5aabaad8a581fb97b9e77c0dcedd46",
+    "summary": "Como acolher com sensibilidade clientes que relatam vício em jogos ou apostas, com recursos de apoio oficiais.",
+    "keywords": "vício em jogos, apostas, ludopatia, autoexclusão de apostas, jogadores anônimos, bets"
+  },
+  {
+    "title": "Má conduta do cliente (ofensas e xingamentos)",
+    "url": "https://app.notion.com/p/3bfaabaad8a581fd942ac3172d25f709",
+    "summary": "Como agir e quando encerrar o atendimento em casos de ofensas, xingamentos ou ameaças do cliente.",
+    "keywords": "cliente ofensivo, xingamento, ameaça, encerrar atendimento, cliente agressivo, palavrão"
+  },
+  {
+    "title": "Diretriz — Contato de Parcerias (oferta de serviços)",
+    "url": "https://app.notion.com/p/396aabaad8a581559ec2e9166dd2c855",
+    "summary": "Como direcionar empresas ou pessoas que entram em contato oferecendo produto/serviço ou propondo parceria com a Facio.",
+    "keywords": "parceria, fornecedor, proposta comercial, oferta de serviço, parcerias facio, quero vender pra facio"
+  },
+  {
+    "title": "Central dos Oráculos (escalonamento interno)",
+    "url": "https://app.notion.com/p/32caabaad8a580ebbc25eb1e64e0f660",
+    "summary": "Quando e como escalar uma dúvida de processo ou atendimento para o time de Oráculos, depois de já ter consultado a Jornada do Cliente.",
+    "keywords": "escalonamento, oráculos, dúvida de processo, suporte-dúvidas, quem eu chamo, não sei o que fazer"
   }
 ]
 </script>
 
 <script id="appScript">
-let DOCS = JSON.parse(document.getElementById('docs-data').textContent);
+let DOCS = JSON.parse(document.getElementById('fallback-docs-data').textContent);
+
+// ---------- carregamento a partir do materiais.csv (mesma pasta no GitHub) ----------
+// Faz um parser de CSV simples que respeita aspas (para campos com vírgulas dentro).
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ row.push(field); field = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(field !== '' || row.length){ row.push(field); rows.push(row); }
+        field = ''; row = [];
+        if(c === '\r' && text[i+1] === '\n') i++;
+      } else field += c;
+    }
+  }
+  if(field !== '' || row.length){ row.push(field); rows.push(row); }
+  return rows.filter(r => r.length && r.some(v => v !== ''));
+}
+
+function csvToDocs(text){
+  const rows = parseCSV(text);
+  if(rows.length < 2) return null;
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const idx = {
+    title: header.indexOf('titulo'),
+    summary: header.indexOf('resumo'),
+    url: header.indexOf('link'),
+    keywords: header.indexOf('palavras_chave')
+  };
+  if(idx.title === -1 || idx.url === -1) return null;
+  return rows.slice(1).map(r => ({
+    title: (r[idx.title] || '').trim(),
+    summary: (r[idx.summary] || '').trim(),
+    url: (r[idx.url] || '').trim(),
+    keywords: (r[idx.keywords] || '').trim()
+  })).filter(d => d.title && d.url);
+}
+
+fetch('materiais.csv', { cache: 'no-store' })
+  .then(res => { if(!res.ok) throw new Error('sem materiais.csv'); return res.text(); })
+  .then(text => {
+    const parsed = csvToDocs(text);
+    if(parsed && parsed.length){ DOCS = parsed; renderResults(); }
+  })
+  .catch(() => { /* mantém a lista de fallback embutida */ });
 
 const input = document.getElementById('searchInput');
 const resultsEl = document.getElementById('results');
@@ -710,29 +802,35 @@ function showToast(msg){
   setTimeout(() => toast.classList.remove('show'), 2200);
 }
 
+// Coloca aspas em cada campo do CSV e escapa aspas internas, no padrão que o parser acima entende.
+function csvEscape(v){
+  return '"' + String(v || '').replace(/"/g, '""') + '"';
+}
+
 document.getElementById('downloadBtn').addEventListener('click', () => {
   const cleanDocs = DOCS.filter(d => d.title && d.url);
-  const scriptEl = document.getElementById('appScript');
+  const header = ['titulo','resumo','link','palavras_chave'].join(',');
+  const lines = cleanDocs.map(d => [
+    csvEscape(d.title), csvEscape(d.summary), csvEscape(d.url), csvEscape(d.keywords)
+  ].join(','));
+  const csv = header + '\n' + lines.join('\n') + '\n';
 
-  const clone = document.documentElement.cloneNode(true);
-  clone.querySelector('#docs-data').textContent = '\n' + JSON.stringify(cleanDocs, null, 2) + '\n';
-  clone.querySelector('#editPanel').classList.remove('show');
-  clone.querySelector('#editToggle').classList.remove('active');
-  clone.querySelector('#results').removeAttribute('style');
-  clone.querySelector('#searchInput').removeAttribute('value');
-  // garante que a lógica do app no arquivo exportado é idêntica à desta página
-  clone.querySelector('#appScript').textContent = scriptEl.textContent;
-
-  const html = '<!DOCTYPE html>\n' + clone.outerHTML;
-  const blob = new Blob([html], { type: 'text/html' });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = 'busca-jornada-cliente.html';
+  link.download = 'materiais.csv';
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 
-  showToast('Arquivo baixado — suba ele no lugar do antigo.');
+  showToast('materiais.csv baixado — agora abra no GitHub e cole o conteúdo.');
+});
+
+// Ajuste aqui se o repositório mudar de nome/usuário/branch.
+const GITHUB_EDIT_URL = 'https://github.com/contafacio/Barra-de-pesquisa/edit/main/materiais.csv';
+
+document.getElementById('openGithubBtn').addEventListener('click', () => {
+  window.open(GITHUB_EDIT_URL, '_blank');
 });
 </script>
 </body>
