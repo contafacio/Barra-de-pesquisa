@@ -1,0 +1,16 @@
+{
+  "name": "barra-de-pesquisa",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "kv_namespaces": [
+    {
+      "binding": "MATERIAIS_KV",
+      "id": "e79137be985347d89cddb850effa6bcb"
+    }
+  ]
+}
